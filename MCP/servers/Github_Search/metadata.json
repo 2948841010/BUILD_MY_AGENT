@@ -1,0 +1,7 @@
+{
+    "name": "github_search",
+    "description": "GitHub repository search and analysis tool for discovering and analyzing open source projects",
+    "author": "@AI4Science",
+    "category": "research",
+    "tools": ["search_repositories", "get_repository_info", "get_repository_languages"]
+} 

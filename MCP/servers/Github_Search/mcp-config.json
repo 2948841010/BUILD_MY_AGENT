@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "github_search": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "servers/Github_Search",
+        "python",
+        "server.py"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio"
+      },
+      "metadata": {
+        "name": "github_search",
+        "description": "GitHub repository search and analysis tool for discovering and analyzing open source projects",
+        "author": "@AI4Science",
+        "category": "research"
+      }
+    }
+  }
+} 
