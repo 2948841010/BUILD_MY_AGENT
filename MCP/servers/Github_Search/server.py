@@ -40,14 +40,21 @@ mcp = FastMCP("github_search", port=args.port, host=args.host)
 
 
 @mcp.tool()
-def search_repositories(query: str, max_results: int = 5, sort: str = "stars") -> List[str]:
+def search_repositories(query: str, max_results: int = 5, sort: str = "stars", search_mode: str = "simple") -> List[str]:
     """
-    Search for repositories on GitHub based on a query and store their information.
+    Search for repositories on GitHub with support for advanced search modes.
 
     Args:
-        query: The search query (e.g., "machine learning", "python web framework")
+        query: The search query. 
+               Simple mode: "machine learning", "python web framework"
+               Advanced mode: Use operators like:
+               - "springboot AND vue" (both keywords must be present)
+               - "react OR vue" (either keyword present)  
+               - "python NOT django" (exclude django)
+               - Complex: "(springboot AND vue) OR (react AND redux)"
         max_results: Maximum number of results to retrieve (default: 5)
         sort: Sort criteria - "stars", "forks", "updated" (default: "stars")
+        search_mode: "simple" or "advanced" (default: "simple")
 
     Returns:
         List of repository full names found in the search
@@ -56,9 +63,15 @@ def search_repositories(query: str, max_results: int = 5, sort: str = "stars") -
     # GitHub Search API endpoint
     url = "https://api.github.com/search/repositories"
     
+    # 处理搜索查询
+    processed_query = query
+    if search_mode == "advanced":
+        # 将用户友好的操作符转换为GitHub搜索语法
+        processed_query = query.replace(" AND ", " ").replace(" OR ", " OR ").replace(" NOT ", " NOT ")
+    
     # 构建搜索参数
     params = {
-        "q": query,
+        "q": processed_query,
         "sort": sort,
         "order": "desc",
         "per_page": min(max_results, 100)  # GitHub API限制每页最多100个
@@ -273,6 +286,145 @@ def get_repository_languages(full_name: str) -> str:
         
     except requests.RequestException as e:
         error_msg = f"Error fetching language data from GitHub: {str(e)}"
+        print(error_msg)
+        return error_msg
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        print(error_msg)
+        return error_msg
+
+
+@mcp.tool()
+def get_repository_tree(full_name: str, path: str = "") -> str:
+    """
+    Get the directory structure of a repository at a specific path.
+
+    Args:
+        full_name: The full name of the repository (e.g., "owner/repository")
+        path: The path within the repository (default: "" for root directory)
+
+    Returns:
+        JSON string with directory structure information
+    """
+    
+    try:
+        # GitHub Contents API endpoint
+        url = f"https://api.github.com/repos/{full_name}/contents/{path}"
+        response = requests.get(url)
+        
+        if response.status_code == 404:
+            return f"Repository '{full_name}' or path '{path}' not found on GitHub."
+        
+        response.raise_for_status()
+        contents_data = response.json()
+        
+        # 处理返回的内容
+        if isinstance(contents_data, list):
+            # 这是一个目录，包含多个文件/文件夹
+            items = []
+            for item in contents_data:
+                item_info = {
+                    'name': item['name'],
+                    'type': item['type'],  # 'file' or 'dir'
+                    'size': item['size'] if item['type'] == 'file' else None,
+                    'path': item['path'],
+                    'download_url': item.get('download_url'),
+                    'html_url': item['html_url']
+                }
+                items.append(item_info)
+            
+            result = {
+                'repository': full_name,
+                'path': path if path else "/",
+                'type': 'directory',
+                'items': items,
+                'total_items': len(items)
+            }
+        else:
+            # 这是一个文件
+            result = {
+                'repository': full_name,
+                'path': path,
+                'type': 'file',
+                'name': contents_data['name'],
+                'size': contents_data['size'],
+                'download_url': contents_data.get('download_url'),
+                'html_url': contents_data['html_url']
+            }
+        
+        return json.dumps(result, indent=2, ensure_ascii=False)
+        
+    except requests.RequestException as e:
+        error_msg = f"Error fetching repository tree from GitHub: {str(e)}"
+        print(error_msg)
+        return error_msg
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        print(error_msg)
+        return error_msg
+
+
+@mcp.tool()
+def get_repository_file_content(full_name: str, file_path: str, max_size: int = 50000) -> str:
+    """
+    Get the content of a specific file in a repository.
+
+    Args:
+        full_name: The full name of the repository (e.g., "owner/repository")
+        file_path: The path to the file within the repository
+        max_size: Maximum file size to retrieve in bytes (default: 50000, ~50KB)
+
+    Returns:
+        JSON string with file content and metadata
+    """
+    
+    try:
+        # GitHub Contents API endpoint for specific file
+        url = f"https://api.github.com/repos/{full_name}/contents/{file_path}"
+        response = requests.get(url)
+        
+        if response.status_code == 404:
+            return f"Repository '{full_name}' or file '{file_path}' not found on GitHub."
+        
+        response.raise_for_status()
+        file_data = response.json()
+        
+        # 检查是否是文件而不是目录
+        if file_data['type'] != 'file':
+            return f"'{file_path}' is not a file, it's a {file_data['type']}."
+        
+        # 检查文件大小
+        file_size = file_data['size']
+        if file_size > max_size:
+            return f"File '{file_path}' is too large ({file_size} bytes). Maximum allowed size is {max_size} bytes. Use get_repository_tree to browse directories instead."
+        
+        # 获取文件内容
+        content = ""
+        if file_data.get('content'):
+            import base64
+            try:
+                # GitHub返回base64编码的内容
+                content = base64.b64decode(file_data['content']).decode('utf-8')
+            except UnicodeDecodeError:
+                # 如果无法解码为UTF-8，可能是二进制文件
+                content = f"[Binary file - {file_size} bytes]"
+        
+        result = {
+            'repository': full_name,
+            'file_path': file_path,
+            'name': file_data['name'],
+            'size': file_size,
+            'encoding': file_data.get('encoding', 'unknown'),
+            'content': content,
+            'sha': file_data['sha'],
+            'html_url': file_data['html_url'],
+            'download_url': file_data.get('download_url')
+        }
+        
+        return json.dumps(result, indent=2, ensure_ascii=False)
+        
+    except requests.RequestException as e:
+        error_msg = f"Error fetching file content from GitHub: {str(e)}"
         print(error_msg)
         return error_msg
     except Exception as e:

@@ -1,0 +1,74 @@
+{
+  "jeecgboot/JeecgBoot": {
+    "name": "JeecgBoot",
+    "full_name": "jeecgboot/JeecgBoot",
+    "description": "🔥企业级低代码平台集成了AI应用平台，帮助企业快速实现低代码开发和构建AI应用！前后端分离架构 SpringBoot，SpringCloud、Mybatis，Ant Design4、 Vue3.0、TS+vite！强大的代码生成器让前后端代码一键生成，无需写任何代码! 引领AI低代码开发模式: AI生成->OnlineCoding-> 代码生成-> 手工MERGE，显著的提高效率，又不失灵活~",
+    "url": "https://github.com/jeecgboot/JeecgBoot",
+    "clone_url": "https://github.com/jeecgboot/JeecgBoot.git",
+    "language": "Java",
+    "stars": 43618,
+    "forks": 15501,
+    "issues": 22,
+    "created_at": "2018-11-26T10:40:00Z",
+    "updated_at": "2025-08-14T00:36:51Z",
+    "owner": {
+      "login": "jeecgboot",
+      "type": "Organization",
+      "url": "https://github.com/jeecgboot"
+    },
+    "topics": [
+      "activiti",
+      "ai",
+      "ant-design-vue",
+      "antd",
+      "bigscreen",
+      "chatgpt",
+      "codegenerator",
+      "deepseek",
+      "flowable",
+      "java",
+      "jeecgboot",
+      "langchain4j",
+      "low-code",
+      "mybatis",
+      "ollama",
+      "spring-boot",
+      "springboot",
+      "springcloud",
+      "vue",
+      "vue3"
+    ],
+    "license": "Apache License 2.0",
+    "default_branch": "master"
+  },
+  "YunaiV/ruoyi-vue-pro": {
+    "name": "ruoyi-vue-pro",
+    "full_name": "YunaiV/ruoyi-vue-pro",
+    "description": "🔥 官方推荐 🔥 RuoYi-Vue 全新 Pro 版本，优化重构所有功能。基于 Spring Boot + MyBatis Plus + Vue & Element 实现的后台管理系统 + 微信小程序，支持 RBAC 动态权限、数据权限、SaaS 多租户、Flowable 工作流、三方登录、支付、短信、商城、CRM、ERP、AI 大模型等功能。你的 ⭐️ Star ⭐️，是作者生发的动力！",
+    "url": "https://github.com/YunaiV/ruoyi-vue-pro",
+    "clone_url": "https://github.com/YunaiV/ruoyi-vue-pro.git",
+    "language": "Java",
+    "stars": 32756,
+    "forks": 7057,
+    "issues": 10,
+    "created_at": "2021-01-24T03:18:25Z",
+    "updated_at": "2025-08-13T14:34:37Z",
+    "owner": {
+      "login": "YunaiV",
+      "type": "User",
+      "url": "https://github.com/YunaiV"
+    },
+    "topics": [
+      "flowable",
+      "mybatis-plus",
+      "mysql",
+      "redis",
+      "redisson",
+      "spring-security",
+      "springboot",
+      "vue"
+    ],
+    "license": "MIT License",
+    "default_branch": "master"
+  }
+}

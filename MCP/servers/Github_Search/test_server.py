@@ -4,7 +4,7 @@
 """
 import asyncio
 import json
-from server import search_repositories, get_repository_info, get_repository_languages
+from server import search_repositories, get_repository_info, get_repository_languages, get_repository_tree, get_repository_file_content
 
 async def test_github_search():
     """测试GitHub搜索功能"""
@@ -48,6 +48,61 @@ async def test_github_search():
                         print(f"  - {lang}: {stats['percentage']}%")
             except json.JSONDecodeError:
                 print(f"语言统计预览: {lang_stats[:200]}...")
+            
+            # 测试4: 高级搜索功能
+            print("\n4️⃣ 测试高级搜索功能")
+            try:
+                advanced_results = search_repositories("springboot AND vue", max_results=2, search_mode="advanced")
+                print(f"高级搜索结果: {advanced_results}")
+            except Exception as e:
+                print(f"高级搜索测试失败: {e}")
+            
+            # 测试5: 获取目录结构
+            print("\n5️⃣ 测试目录结构功能")
+            try:
+                tree_result = get_repository_tree(test_repo)
+                tree_data = json.loads(tree_result)
+                print(f"根目录包含 {tree_data.get('total_items', 0)} 个项目")
+                
+                # 显示前几个项目
+                if 'items' in tree_data:
+                    print("根目录内容:")
+                    for item in tree_data['items'][:5]:
+                        print(f"  - {item['name']} ({item['type']})")
+                    
+                    # 尝试查看一个文件内容（选择一个较小的文件）
+                    test_file = None
+                    for item in tree_data['items']:
+                        if item['name'].lower() in ['.gitignore', 'contributing.md', 'citation.cff']:
+                            test_file = item['path']
+                            break
+                    
+                    # 如果没有找到小文件，尝试README但增加大小限制
+                    if not test_file:
+                        for item in tree_data['items']:
+                            if item['name'].lower() in ['readme.md', 'readme.txt', 'readme']:
+                                test_file = item['path']
+                                break
+                    
+                    if test_file:
+                        # 根据文件类型设置合适的大小限制
+                        max_size = 50000 if test_file.lower().endswith('.md') else 5000
+                        print(f"\n6️⃣ 测试文件内容功能 - 查看 {test_file}")
+                        try:
+                            file_content = get_repository_file_content(test_repo, test_file, max_size=max_size)
+                            if file_content.startswith('{'):
+                                content_data = json.loads(file_content)
+                                content_preview = content_data.get('content', '')[:300]
+                                print(f"文件大小: {content_data.get('size', 0)} 字节")
+                                print(f"内容预览: {content_preview}...")
+                            else:
+                                print(f"非JSON响应: {file_content[:200]}...")
+                        except Exception as e:
+                            print(f"文件内容读取失败: {e}")
+                            print(f"返回内容: {file_content[:200] if 'file_content' in locals() else 'N/A'}")
+                            
+            except Exception as e:
+                print(f"目录结构测试失败: {e}")
                 
         else:
             print("❌ 搜索失败，可能是网络问题或API限制")
