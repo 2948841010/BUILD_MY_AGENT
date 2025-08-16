@@ -1575,9 +1575,292 @@ async def async_search_github(query: str) -> Dict[str, Any]:
     return await plan_execute_agent.search(query)
 
 
+class AgentMode(Enum):
+    """代理模式枚举"""
+    AUTO = "auto"                    # 自动选择
+    PLAN_EXECUTE = "plan_execute"    # 强制使用Plan and Execute
+    REACT = "react"                  # 强制使用ReAct
+
+
+class SmartAgentRouter:
+    """智能代理路由器 - 根据查询特征动态选择最适合的代理模式"""
+    
+    def __init__(self):
+        self.plan_execute_agent = plan_execute_agent
+        self.react_agent = react_agent
+        
+        # 路由决策统计
+        self.routing_stats = {
+            "total_queries": 0,
+            "plan_execute_count": 0,
+            "react_count": 0,
+            "auto_decisions": 0
+        }
+    
+    def analyze_query_complexity(self, query: str) -> Dict[str, Any]:
+        """分析查询复杂度和特征"""
+        query_lower = query.lower()
+        
+        # 复杂度指标
+        complexity_score = 0
+        features = {
+            "is_comparison": False,
+            "is_multi_step": False,
+            "is_complex_analysis": False,
+            "is_simple_search": False,
+            "has_specific_requirements": False,
+            "word_count": len(query.split()),
+            "complexity_keywords": 0
+        }
+        
+        # 对比分析关键词
+        comparison_keywords = ['vs', '对比', '比较', '哪个更好', '差异', '选择', '推荐']
+        if any(keyword in query_lower for keyword in comparison_keywords):
+            features["is_comparison"] = True
+            complexity_score += 3
+        
+        # 多步骤分析关键词
+        multi_step_keywords = ['分析', '研究', '深入', '详细', '全面', '系统性']
+        if any(keyword in query_lower for keyword in multi_step_keywords):
+            features["is_multi_step"] = True
+            complexity_score += 2
+        
+        # 复杂分析关键词
+        complex_keywords = ['架构', '设计模式', '技术栈', '最佳实践', '性能对比', '技术选型']
+        complex_count = sum(1 for keyword in complex_keywords if keyword in query_lower)
+        if complex_count > 0:
+            features["is_complex_analysis"] = True
+            features["complexity_keywords"] = complex_count
+            complexity_score += complex_count * 2
+        
+        # 特定需求关键词
+        requirement_keywords = ['如何', '怎么', '实现', '解决', '方案', '教程']
+        if any(keyword in query_lower for keyword in requirement_keywords):
+            features["has_specific_requirements"] = True
+            complexity_score += 1
+        
+        # 简单搜索判断
+        if features["word_count"] <= 3 and complexity_score == 0:
+            features["is_simple_search"] = True
+        
+        # 基于词数的复杂度
+        if features["word_count"] > 8:
+            complexity_score += 1
+        
+        return {
+            "complexity_score": complexity_score,
+            "features": features
+        }
+    
+    def decide_agent_mode(self, query: str, force_mode: AgentMode = AgentMode.AUTO) -> AgentMode:
+        """决定使用哪种代理模式"""
+        if force_mode != AgentMode.AUTO:
+            return force_mode
+        
+        analysis = self.analyze_query_complexity(query)
+        complexity_score = analysis["complexity_score"]
+        features = analysis["features"]
+        
+        # 决策逻辑
+        decision_reasons = []
+        
+        # 推荐Plan and Execute的情况
+        if complexity_score >= 4:
+            decision_reasons.append(f"高复杂度查询 (分数: {complexity_score})")
+            self.routing_stats["auto_decisions"] += 1
+            return AgentMode.PLAN_EXECUTE
+        
+        if features["is_comparison"] and features["is_multi_step"]:
+            decision_reasons.append("需要对比分析和多步骤处理")
+            self.routing_stats["auto_decisions"] += 1
+            return AgentMode.PLAN_EXECUTE
+        
+        if features["is_complex_analysis"] and features["complexity_keywords"] >= 2:
+            decision_reasons.append("复杂技术分析需求")
+            self.routing_stats["auto_decisions"] += 1
+            return AgentMode.PLAN_EXECUTE
+        
+        if features["word_count"] > 10:
+            decision_reasons.append("查询描述复杂，需要结构化规划")
+            self.routing_stats["auto_decisions"] += 1
+            return AgentMode.PLAN_EXECUTE
+        
+        # 推荐ReAct的情况
+        if features["is_simple_search"] or complexity_score <= 1:
+            decision_reasons.append("简单搜索，ReAct更高效")
+            self.routing_stats["auto_decisions"] += 1
+            return AgentMode.REACT
+        
+        # 默认使用Plan and Execute (更稳定)
+        decision_reasons.append("默认选择Plan and Execute模式")
+        self.routing_stats["auto_decisions"] += 1
+        return AgentMode.PLAN_EXECUTE
+    
+    async def smart_search(self, query: str, mode: AgentMode = AgentMode.AUTO, verbose: bool = False) -> Dict[str, Any]:
+        """智能搜索 - 自动选择最适合的代理模式"""
+        self.routing_stats["total_queries"] += 1
+        
+        # 决定使用的模式
+        selected_mode = self.decide_agent_mode(query, mode)
+        
+        if verbose:
+            analysis = self.analyze_query_complexity(query)
+            print(f"🧠 智能路由分析:")
+            print(f"   查询: {query}")
+            print(f"   复杂度分数: {analysis['complexity_score']}")
+            print(f"   选择模式: {selected_mode.value}")
+            print(f"   决策依据: {analysis['features']}")
+            print(f"   路由统计: {self.routing_stats}")
+        
+        # 执行搜索
+        try:
+            if selected_mode == AgentMode.PLAN_EXECUTE:
+                self.routing_stats["plan_execute_count"] += 1
+                result = await self.plan_execute_agent.search(query)
+                result["_agent_mode"] = "plan_execute"
+                result["_routing_decision"] = "自动选择Plan and Execute模式"
+                
+            else:  # ReAct模式
+                self.routing_stats["react_count"] += 1
+                react_result = await self.react_agent.execute_react_cycle(query)
+                
+                # 将ReAct结果转换为统一格式
+                result = {
+                    "user_query": query,
+                    "agent_mode": "react", 
+                    "result": react_result,
+                    "_agent_mode": "react",
+                    "_routing_decision": "自动选择ReAct模式",
+                    "execution": {
+                        "mode": "react",
+                        "iterations": self.react_agent.state.iteration_count,
+                        "discovered_repos": len(self.react_agent.state.repositories_found),
+                        "analyzed_repos": len(self.react_agent.state.detailed_analysis)
+                    }
+                }
+            
+            return result
+            
+        except Exception as e:
+            # 错误降级：如果选择的模式失败，尝试另一种模式
+            print(f"⚠️ {selected_mode.value}模式执行失败: {str(e)}")
+            print(f"🔄 降级到{'ReAct' if selected_mode == AgentMode.PLAN_EXECUTE else 'Plan and Execute'}模式")
+            
+            try:
+                if selected_mode == AgentMode.PLAN_EXECUTE:
+                    # 降级到ReAct
+                    react_result = await self.react_agent.execute_react_cycle(query)
+                    return {
+                        "user_query": query,
+                        "result": react_result,
+                        "_agent_mode": "react_fallback",
+                        "_routing_decision": "Plan and Execute失败，降级到ReAct",
+                        "error_recovery": True
+                    }
+                else:
+                    # 降级到Plan and Execute
+                    result = await self.plan_execute_agent.search(query)
+                    result["_agent_mode"] = "plan_execute_fallback"
+                    result["_routing_decision"] = "ReAct失败，降级到Plan and Execute"
+                    result["error_recovery"] = True
+                    return result
+                    
+            except Exception as fallback_error:
+                return {
+                    "error": f"两种模式都失败: {str(e)} | {str(fallback_error)}",
+                    "user_query": query,
+                    "_agent_mode": "failed",
+                    "_routing_decision": "智能路由失败"
+                }
+    
+    def get_routing_stats(self) -> Dict[str, Any]:
+        """获取路由统计信息"""
+        total = self.routing_stats["total_queries"]
+        if total == 0:
+            return self.routing_stats
+        
+        return {
+            **self.routing_stats,
+            "plan_execute_percentage": round(self.routing_stats["plan_execute_count"] / total * 100, 1),
+            "react_percentage": round(self.routing_stats["react_count"] / total * 100, 1),
+            "auto_decision_percentage": round(self.routing_stats["auto_decisions"] / total * 100, 1)
+        }
+
+
+# 创建全局智能路由器实例
+smart_router = SmartAgentRouter()
+
+
+# 新的统一智能搜索接口
+def intelligent_search_github(query: str, mode: str = "auto", verbose: bool = False) -> Dict[str, Any]:
+    """
+    智能GitHub搜索 - 自动选择最适合的代理模式
+    
+    Args:
+        query: 搜索查询
+        mode: 代理模式 ("auto", "plan_execute", "react") 
+        verbose: 是否显示路由决策过程
+    
+    Returns:
+        搜索结果字典，包含代理模式信息
+    """
+    try:
+        # 转换模式参数
+        agent_mode = AgentMode(mode.lower())
+        
+        # 检查事件循环并执行
+        try:
+            loop = asyncio.get_running_loop()
+            
+            def run_in_thread():
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    return new_loop.run_until_complete(
+                        smart_router.smart_search(query, agent_mode, verbose)
+                    )
+                finally:
+                    new_loop.close()
+            
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                return future.result()
+                
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(
+                    smart_router.smart_search(query, agent_mode, verbose)
+                )
+            finally:
+                loop.close()
+                
+    except Exception as e:
+        return {
+            "error": f"智能搜索失败: {str(e)}",
+            "user_query": query,
+            "_agent_mode": "error"
+        }
+
+
+async def async_intelligent_search_github(query: str, mode: str = "auto", verbose: bool = False) -> Dict[str, Any]:
+    """智能GitHub搜索 - 异步版本"""
+    agent_mode = AgentMode(mode.lower())
+    return await smart_router.smart_search(query, agent_mode, verbose)
+
+
+def get_search_stats() -> Dict[str, Any]:
+    """获取搜索统计信息"""
+    return smart_router.get_routing_stats()
+
 
 # 导出主要组件
 __all__ = [
+    # 🚀 智能路由系统 (最新推荐)
+    'intelligent_search_github', 'async_intelligent_search_github', 
+    'smart_router', 'SmartAgentRouter', 'AgentMode', 'get_search_stats',
+    
     # 双模型代理 (推荐)
     'plan_execute_agent', 'PlanAndExecuteGitHubAgent',
     'search_github', 'async_search_github', 'plan_and_execute_search',
